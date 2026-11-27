@@ -9,6 +9,9 @@ For each k we estimate:
   * "could have paid less and still won": the winner's slack = winning bid minus
     second-highest bid. Any slack > 0 means the winner overpaid.
 
+Also: expected seller revenue of the first-price auction at equilibrium vs the
+second-price auction with truthful bids, n = 2..8 (revenue equivalence).
+
 Run:  python part2_fpa.py          -> figures/part2_*.png + markdown tables on stdout
 """
 from pathlib import Path
@@ -28,6 +31,7 @@ KS = np.union1d(np.round(np.arange(0.10, 2.0001, 0.05), 2), [2 / 3])
 N_SIMS = 200_000
 CENT = 0.01  # "meaningful" overpayment threshold
 SEED = 11
+REVENUE_NS = range(2, 9)
 
 
 def analytic_utility(n, k, grid=200_001):
@@ -126,7 +130,42 @@ def main():
     fig.tight_layout()
     fig.savefig(FIG / "part2_overpayment.png", dpi=130)
     plt.close(fig)
-    print("\nFigures: figures/part2_utility.png, figures/part2_overpayment.png")
+    revenue(rng)
+    print("\nFigures: figures/part2_utility.png, figures/part2_overpayment.png, figures/part2_revenue.png")
+
+
+def revenue(rng):
+    """Seller revenue: FPA with everyone at the equilibrium bid (n-1)/n·v vs SPA with truthful bids.
+
+    Both have expectation (n-1)/(n+1) (revenue equivalence). Same value draws for both auctions.
+    """
+    print("\n#### Seller revenue: first-price (equilibrium) vs second-price (truthful)\n")
+    print("| n | FPA revenue (sim) | SE | SPA revenue (sim) | SE | theory (n-1)/(n+1) |")
+    print("|---|---|---|---|---|---|")
+    rows = []
+    for n in REVENUE_NS:
+        values = np.sort(rng.random((n, N_SIMS)), axis=0)
+        fpa = (n - 1) / n * values[-1]  # winner pays own bid
+        spa = values[-2]  # winner pays second-highest (truthful) bid
+        theory = (n - 1) / (n + 1)
+        stats = [(x.mean(), x.std() / np.sqrt(N_SIMS)) for x in (fpa, spa)]
+        for mean, se in stats:
+            assert abs(mean - theory) < 5 * se, f"revenue disagrees with theory, n={n}"
+        rows.append((n, *stats[0], *stats[1], theory))
+        print(f"| {n} | {stats[0][0]:.4f} | {stats[0][1]:.4f} | {stats[1][0]:.4f} | {stats[1][1]:.4f} | {theory:.4f} |")
+    n, f, fse, s_, sse, th = map(np.array, zip(*rows))
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ns = np.linspace(2, 8, 200)
+    ax.plot(ns, (ns - 1) / (ns + 1), "k-", lw=1, label="theory (n−1)/(n+1)")
+    ax.errorbar(n - 0.07, f, yerr=2 * fse, fmt="o", color="tab:blue", label="first-price, equilibrium bids")
+    ax.errorbar(n + 0.07, s_, yerr=2 * sse, fmt="s", color="tab:orange", label="second-price, truthful bids")
+    ax.set_xlabel("number of bidders n")
+    ax.set_ylabel("expected seller revenue")
+    ax.set_title("Revenue equivalence: both auctions earn (n−1)/(n+1)")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(FIG / "part2_revenue.png", dpi=130)
+    plt.close(fig)
 
 
 if __name__ == "__main__":

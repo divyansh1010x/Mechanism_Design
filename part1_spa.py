@@ -136,9 +136,38 @@ def part_b(rival_sets, tag):
     print(f"\nFigure: {out.relative_to(FIG.parent)}")
 
 
+def heatmap():
+    """E[u](v, b) against one truthful U[0,1] rival, for every v on the grid (closed form)."""
+    vs = BIDS
+    eu = np.array([analytic_utility(v, BIDS, 1, 1.0) for v in vs])  # rows v, cols b
+    best_b = BIDS[eu.argmax(axis=1)]
+    assert np.allclose(best_b, vs), "argmax bid differs from v"
+    loss = eu.max(axis=1, keepdims=True) - eu  # utility given up vs the best bid for that v
+    lim = np.abs(eu).max()  # centred on 0 so the loss region (low v, overbid) shows red
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    panels = ((eu, "RdBu", -lim, lim, "expected utility E[u](v, b)", "expected utility"),
+              (loss, "magma_r", 0, loss.max(), "utility lost vs best bid for that v", "max_b E[u] − E[u](v, b)"))
+    for ax, (z, cmap, lo, hi, title, cbar) in zip(axes, panels):
+        im = ax.imshow(z, origin="lower", extent=(0, 1, 0, 1), aspect="auto", cmap=cmap, vmin=lo, vmax=hi)
+        ax.plot([0, 1], [0, 1], "k--", lw=1, label="b = v")
+        ax.plot(best_b[::5], vs[::5], "o", ms=4, mfc="gold", mec="black", label="argmax b for each v")
+        ax.set_xlabel("bidder 1 bid b")
+        ax.set_ylabel("bidder 1 value v")
+        ax.set_title(title)
+        fig.colorbar(im, ax=ax, label=cbar)
+    axes[0].legend(loc="upper left", fontsize=8)
+    fig.suptitle("Second-price auction, 1 truthful U[0,1] rival: the best bid lies on b = v for every v")
+    fig.tight_layout()
+    out = FIG / "part1_heatmap.png"
+    fig.savefig(out, dpi=130)
+    plt.close(fig)
+    print(f"\n### Part 1 heatmap: argmax b = v for all {len(vs)} values of v on the grid\n\nFigure: {out.relative_to(FIG.parent)}")
+
+
 if __name__ == "__main__":
     rng = np.random.default_rng(SEED)
     part_a(1, rng)
     part_b([(0.1,), (0.4,), (0.9,)], "B")
     part_a(2, rng)
     part_b([(0.1, 0.1), (0.4, 0.4), (0.9, 0.9), (0.1, 0.9)], "C-B")
+    heatmap()

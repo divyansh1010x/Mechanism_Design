@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auctions and VCG Explorer</title>
+<meta name="description" content="Interactive demo: second-price auction, first-price auction equilibrium, and the VCG shortest-path mechanism (Shoham & Leyton-Brown ch. 7). Self-contained, works offline.">
+<style>
+:root {
+  --bg: #fbfaf7; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e0d8; --grid: #eeebe4;
+  --accent: #1f6feb; --accent2: #d9480f; --good: #2b8a3e; --bad: #c92a2a; --mark: #f2b705; --off: #b8b5ad;
+  --chip: #f1efe9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151514; --panel: #1e1e1c; --ink: #ecebe6; --muted: #a09e97; --line: #34332f; --grid: #2a2926;
+    --accent: #6ea8fe; --accent2: #ff8c5a; --good: #51cf66; --bad: #ff6b6b; --mark: #ffd43b; --off: #5c5a55;
+    --chip: #2a2926;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #151514; --panel: #1e1e1c; --ink: #ecebe6; --muted: #a09e97; --line: #34332f; --grid: #2a2926;
+  --accent: #6ea8fe; --accent2: #ff8c5a; --good: #51cf66; --bad: #ff6b6b; --mark: #ffd43b; --off: #5c5a55;
+  --chip: #2a2926;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.5rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+nav button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  padding: 7px 14px; border-radius: 999px; cursor: pointer; }
+nav button[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+section { display: none; }
+section.active { display: block; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+.card h2 { font-size: 1.1rem; margin: 0 0 6px; }
+.card p { margin: 6px 0; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 20px; margin: 10px 0 4px; }
+label.ctl { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; color: var(--muted); }
+label.ctl b { color: var(--ink); font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+select, input[type=number] { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 6px; }
+input[type=number] { width: 4.6em; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.stat { background: var(--chip); border-radius: 8px; padding: 6px 10px; font-size: 0.88rem; }
+.stat b { font-variant-numeric: tabular-nums; }
+svg { width: 100%; height: auto; display: block; }
+svg text { fill: var(--ink); font: 12px system-ui, sans-serif; }
+svg .axis { stroke: var(--muted); stroke-width: 1; }
+svg .gridl { stroke: var(--grid); stroke-width: 1; }
+svg .tick { fill: var(--muted); font-size: 11px; }
+svg .s-main { fill: none; stroke: var(--accent); stroke-width: 2.4; }
+svg .s-alt { fill: none; stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 5 4; }
+svg .v-true { stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 3 3; }
+svg .v-eq { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 3 3; }
+svg .v-cur { stroke: var(--accent2); stroke-width: 1.5; }
+svg .v-rival { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 6 3; }
+svg .halo { paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+svg .lbl-true { fill: var(--bad); } svg .lbl-eq { fill: var(--good); } svg .lbl-cur { fill: var(--accent2); }
+svg .lbl-rival { fill: var(--muted); }
+svg .pt-max { fill: var(--mark); stroke: var(--ink); stroke-width: 1; }
+svg .pt-cur { fill: var(--accent2); stroke: var(--ink); stroke-width: 1; }
+svg .opt { fill: var(--mark); opacity: 0.22; }
+svg .zero { stroke: var(--muted); stroke-width: 1; opacity: 0.6; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.82rem; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
+.legend i.dot { width: 10px; height: 10px; border: 1px solid var(--ink); border-radius: 50%; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 6px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+tr.on td { background: color-mix(in srgb, var(--good) 12%, transparent); }
+.scroll { overflow-x: auto; }
+.pos { color: var(--good); font-weight: 600; } .neg { color: var(--bad); font-weight: 600; }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.btns button { font: inherit; font-size: 0.85rem; border: 1px solid var(--line); background: var(--chip); color: var(--ink);
+  padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+svg .edge { stroke: var(--off); stroke-width: 1.6; fill: none; }
+svg .edge.on { stroke: var(--good); stroke-width: 4; }
+svg .node { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
+svg .node.on { stroke: var(--good); stroke-width: 3; }
+svg .nodelbl { font-size: 16px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+svg .elbl { font-size: 12px; text-anchor: middle; dominant-baseline: central; fill: var(--muted); }
+svg .elbl.on { fill: var(--ink); font-weight: 700; }
+svg .elbg { fill: var(--panel); }
+svg #arr path { fill: var(--off); } svg #arrOn path { fill: var(--good); }
+@media (max-width: 600px) { /* charts scale down ~2x on phones: enlarge their text in viewBox units */
+  #spa-plot text, #fpa-plot text { font-size: 20px; }
+  #spa-plot .tick, #fpa-plot .tick { font-size: 17px; }
+}
+footer { color: var(--muted); font-size: 0.82rem; margin-top: 24px; }
+code { background: var(--chip); padding: 1px 4px; border-radius: 4px; font-size: 0.9em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Auctions and VCG Explorer</h1>
+  <p class="sub">Shoham &amp; Leyton-Brown, <i>Multiagent Systems</i>, ch. 7: Thm 7.9 (second-price), Thm 7.10 (first-price), Fig 7.3 (VCG shortest path). Every curve uses the closed forms from <code>REPORT.md</code>.</p>
+
+  <nav role="tablist">
+    <button role="tab" data-tab="spa">1 · Second-price</button>
+    <button role="tab" data-tab="fpa">2 · First-price</button>
+    <button role="tab" data-tab="vcg">3 · VCG path</button>
+  </nav>
+
+  <!-- ===================================================== SPA -->
+  <section id="tab-spa">
+    <div class="card">
+      <h2>Second-price sealed-bid auction</h2>
+      <p>Bidder 1 has value <i>v</i> and bids <i>b</i>. The highest bid wins and pays the highest rival bid. Move the sliders: the peak of the curve stays at <i>b = v</i> whatever the rivals do.</p>
+      <div class="controls">
+        <label class="ctl">value v = <b id="spa-v-out"></b><input id="spa-v" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+        <label class="ctl">number of rivals m = <b id="spa-m-out"></b><input id="spa-m" type="range" min="1" max="3" step="1" value="1"></label>
+        <label class="ctl">rival strategy
+          <select id="spa-s">
+            <option value="truthful">truthful: bid = value ~ U[0,1]</option>
+            <option value="half">half: bid = value/2</option>
+            <option value="random">random: bid ~ U[0,1], ignores value</option>
+            <option value="fixed">fixed bid r</option>
+          </select></label>
+        <label class="ctl" id="spa-r-wrap">fixed rival bid r = <b id="spa-r-out"></b><input id="spa-r" type="range" min="0" max="1" step="0.01" value="0.4"></label>
+      </div>
+      <svg id="spa-plot" viewBox="0 0 640 340" role="img" aria-label="Expected utility against bid"></svg>
+      <div class="legend"><span><i style="border-color:var(--accent)"></i>E[u](b)</span><span><i style="border-color:var(--bad);border-top-style:dashed"></i>b = v</span><span><i class="dot" style="background:var(--mark)"></i>best bid(s)</span><span id="spa-rival-leg"><i style="border-color:var(--muted);border-top-style:dashed"></i>highest rival bid</span></div>
+      <div class="stats" id="spa-stats"></div>
+    </div>
+  </section>
+
+  <!-- ===================================================== FPA -->
+  <section id="tab-fpa">
+    <div class="card">
+      <h2>First-price auction, n bidders</h2>
+      <p>Bidders 2…n play the equilibrium bid (n−1)/n·v. Bidder 1 bids k·v₁ with v₁ ~ U[0,1]. The curve is bidder 1's ex-ante expected utility; its peak sits at the equilibrium shading k = (n−1)/n.</p>
+      <div class="controls">
+        <label class="ctl">bidders n = <b id="fpa-n-out"></b><input id="fpa-n" type="range" min="2" max="6" step="1" value="3"></label>
+        <label class="ctl">bidder 1 shading k = <b id="fpa-k-out"></b><input id="fpa-k" type="range" min="0.1" max="2" step="0.01" value="1"></label>
+      </div>
+      <svg id="fpa-plot" viewBox="0 0 640 340" role="img" aria-label="Expected utility against shading factor"></svg>
+      <div class="legend"><span><i style="border-color:var(--accent)"></i>E[u](k)</span><span><i style="border-color:var(--good);border-top-style:dashed"></i>equilibrium k</span><span><i style="border-color:var(--accent2)"></i>your k</span></div>
+      <div class="stats" id="fpa-stats"></div>
+    </div>
+  </section>
+
+  <!-- ===================================================== VCG -->
+  <section id="tab-vcg">
+    <div class="card">
+      <h2>VCG for the cheapest A→F path (Fig 7.3)</h2>
+      <p>Each directed edge is an agent with a private cost. Change what an edge <i>declares</i>. VCG picks the path that is cheapest by declared cost and pays each chosen edge (cost of best path without it) − (others' declared cost on the chosen path). Utility always uses the <i>true</i> cost. The last column shows what the edge gains by its declaration versus telling the truth, others as declared: it is never positive.</p>
+      <div class="btns">
+        <button data-preset="truth">all truthful</button>
+        <button data-preset="AB:4.5">AB overstates (4.5)</button>
+        <button data-preset="CE:1">CE understates (1)</button>
+        <button data-preset="EF:3">EF overstates (3)</button>
+      </div>
+      <svg id="vcg-graph" viewBox="0 0 620 300" role="img" aria-label="Fig 7.3 network with chosen path"></svg>
+      <div class="stats" id="vcg-stats"></div>
+      <div class="scroll" style="margin-top:10px">
+        <table id="vcg-table">
+          <thead><tr><th>edge</th><th>true cost</th><th>declared</th><th>on path</th><th>best path without</th><th>paid to edge</th><th>utility</th><th>gain vs truthful</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <footer>Self-contained page: no network access, no external scripts. Open the file in any browser, or host the <code>demo/</code> folder (e.g. GitHub Pages). Simulations and assertions live in <code>part1_spa.py</code>, <code>part2_fpa.py</code>, <code>part3_vcg.py</code>.</footer>
+</main>
+
+<script>
+// BEGIN PURE (no DOM; extracted and tested under node)
+const BIDS = Array.from({ length: 101 }, (_, i) => i / 100);
+
+/** E[u(b)] when m rivals bid i.i.d. U[0,c]: v t^m − m c t^(m+1)/(m+1), t = min(b,c)/c. */
+function spaExpected(v, b, m, c) {
+  const t = Math.min(b, c) / c;
+  return v * t ** m - (m * c * t ** (m + 1)) / (m + 1);
+}
+
+/** Utility against a fixed highest rival bid r (tie split 50/50). */
+function spaFixed(v, b, r) {
+  return b > r ? v - r : b === r ? 0.5 * (v - r) : 0;
+}
+
+function spaCurve(v, m, strategy, r) {
+  if (strategy === "fixed") return BIDS.map((b) => spaFixed(v, b, r));
+  const c = strategy === "half" ? 0.5 : 1.0; // "random" bids are U[0,1] too
+  return BIDS.map((b) => spaExpected(v, b, m, c));
+}
+
+/** Maximal runs of grid points within tol of the max: [[lo, hi], ...]. */
+function argmaxRuns(xs, ys, tol = 1e-12) {
+  const top = Math.max(...ys), runs = [];
+  let start = -1;
+  ys.forEach((y, i) => {
+    const hit = y >= top - tol;
+    if (hit && start < 0) start = i;
+    if ((!hit || i === ys.length - 1) && start >= 0) {
+      runs.push([xs[start], xs[hit ? i : i - 1]]);
+      start = -1;
+    }
+  });
+  return runs;
+}
+
+/** Ex-ante E[u] for bidder 1 bidding k·v1, others at (n−1)/n·v, all values U[0,1].
+ *  P(win | v) = min(1, a v)^(n−1) with a = n k/(n−1). Closed form of the integral in part2_fpa.py. */
+function fpaExpected(n, k) {
+  const a = (n * k) / (n - 1);
+  const integral = a <= 1 ? a ** (n - 1) / (n + 1) : 1 / (a * a * (n + 1)) + (1 - 1 / (a * a)) / 2;
+  return (1 - k) * integral;
+}
+
+const TRUE_COSTS = { AB: 3, AC: 2, BD: 2, BE: 1, CE: 3, CF: 5, DF: 2, EF: 1 };
+const SOURCE = "A", TARGET = "F";
+
+function allPaths(edges, node = SOURCE, seen = SOURCE) {
+  if (node === TARGET) return [seen];
+  return edges.filter((e) => e[0] === node && !seen.includes(e[1]))
+    .flatMap((e) => allPaths(edges, e[1], seen + e[1]));
+}
+const PATHS = allPaths(Object.keys(TRUE_COSTS));
+const pathEdges = (p) => Array.from({ length: p.length - 1 }, (_, i) => p.slice(i, i + 2));
+const pathCost = (p, costs) => pathEdges(p).reduce((s, e) => s + costs[e], 0);
+
+/** Cheapest A→F path avoiding `exclude`; ties broken by the lexicographically smallest path. */
+function bestPath(costs, exclude = null) {
+  let best = null, bestCost = Infinity;
+  for (const p of PATHS) {
+    if (exclude && pathEdges(p).includes(exclude)) continue;
+    const c = pathCost(p, costs);
+    if (c < bestCost || (c === bestCost && p < best)) { best = p; bestCost = c; }
+  }
+  return [best, bestCost];
+}
+
+/** VCG on declared costs: chosen path and payments p_i in the book's sign (negative = mechanism pays i). */
+function vcg(declared) {
+  const [chosen, total] = bestPath(declared);
+  const on = new Set(pathEdges(chosen));
+  const payments = {};
+  for (const e of Object.keys(declared)) {
+    const othersWith = total - (on.has(e) ? declared[e] : 0);
+    payments[e] = othersWith - bestPath(declared, e)[1];
+  }
+  return { chosen, payments };
+}
+
+/** Utility of `edge` (true cost from trueCosts) under the declared profile. */
+function edgeUtility(edge, declared, trueCosts = TRUE_COSTS) {
+  const { chosen, payments } = vcg(declared);
+  const on = pathEdges(chosen).includes(edge);
+  return -payments[edge] - (on ? trueCosts[edge] : 0);
+}
+// END PURE
+
+// ------------------------------------------------------------------ plotting
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, text) => {
+  const n = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (text !== undefined) n.textContent = text;
+  return n;
+};
+const fmt = (x, d = 3) => (Math.abs(x) < 5e-10 ? 0 : x).toFixed(d).replace(/\.?0+$/, "") || "0";
+
+function niceTicks(lo, hi, count = 6) {
+  const raw = (hi - lo) / count, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((s) => s * mag).find((s) => raw <= s);
+  const out = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) out.push(+t.toFixed(10));
+  return out;
+}
+
+/** opts: {x:[lo,hi], y:[lo,hi], xlabel, ylabel, series:[{xs,ys,cls,step}], vlines:[{x,cls,label,lcls}],
+ *         bands:[[lo,hi]], points:[{x,y,cls}]} */
+function plot(svg, o) {
+  const W = 640, H = 340, L = 58, R = 16, T = 16, B = 46;
+  const sx = (x) => L + ((x - o.x[0]) / (o.x[1] - o.x[0])) * (W - L - R);
+  const sy = (y) => H - B - ((y - o.y[0]) / (o.y[1] - o.y[0])) * (H - T - B);
+  svg.replaceChildren();
+  for (const t of niceTicks(o.y[0], o.y[1], 5)) {
+    svg.append(el("line", { x1: L, x2: W - R, y1: sy(t), y2: sy(t), class: "gridl" }));
+    svg.append(el("text", { x: L - 6, y: sy(t) + 4, "text-anchor": "end", class: "tick" }, fmt(t, 2)));
+  }
+  for (const t of niceTicks(o.x[0], o.x[1], 8)) {
+    svg.append(el("line", { x1: sx(t), x2: sx(t), y1: H - B, y2: H - B + 4, class: "axis" }));
+    svg.append(el("text", { x: sx(t), y: H - B + 17, "text-anchor": "middle", class: "tick" }, fmt(t, 2)));
+  }
+  for (const [lo, hi] of o.bands || [])
+    svg.append(el("rect", { x: sx(lo) - 2, y: T, width: Math.max(4, sx(hi) - sx(lo) + 4), height: H - T - B, class: "opt" }));
+  if (o.y[0] < 0 && o.y[1] > 0) svg.append(el("line", { x1: L, x2: W - R, y1: sy(0), y2: sy(0), class: "zero" }));
+  svg.append(el("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, class: "axis" }));
+  svg.append(el("line", { x1: L, x2: L, y1: T, y2: H - B, class: "axis" }));
+  svg.append(el("text", { x: (L + W - R) / 2, y: H - 8, "text-anchor": "middle" }, o.xlabel));
+  svg.append(el("text", { x: 14, y: (T + H - B) / 2, "text-anchor": "middle", transform: `rotate(-90 14 ${(T + H - B) / 2})` }, o.ylabel));
+  for (const s of o.series) {
+    let d = "";
+    s.xs.forEach((x, i) => {
+      const X = sx(x), Y = sy(s.ys[i]);
+      if (i === 0) d = `M${X},${Y}`;
+      else d += s.step ? `H${X}V${Y}` : `L${X},${Y}`;
+    });
+    svg.append(el("path", { d, class: s.cls }));
+  }
+  (o.vlines || []).forEach((v, i) => {
+    svg.append(el("line", { x1: sx(v.x), x2: sx(v.x), y1: T, y2: H - B, class: v.cls }));
+    if (v.label) svg.append(el("text", { x: sx(v.x) + 4, y: T + 12 + 14 * i, class: `${v.lcls} halo` }, v.label));
+  });
+  for (const p of o.points || []) svg.append(el("circle", { cx: sx(p.x), cy: sy(p.y), r: 5, class: p.cls }));
+}
+
+const yRange = (ys) => {
+  let lo = Math.min(0, ...ys), hi = Math.max(0, ...ys);
+  const pad = (hi - lo) * 0.08 || 0.05;
+  return [lo - pad, hi + pad];
+};
+const stat = (label, val) => `<span class="stat">${label} <b>${val}</b></span>`;
+const $ = (id) => document.getElementById(id);
+
+// ------------------------------------------------------------------ SPA
+function renderSPA() {
+  const v = +$("spa-v").value, m = +$("spa-m").value, s = $("spa-s").value;
+  const r = Math.round(+$("spa-r").value * 100) / 100;
+  $("spa-v-out").textContent = v.toFixed(2);
+  $("spa-m-out").textContent = s === "fixed" ? `${m} (all bid r)` : m;
+  $("spa-r-out").textContent = r.toFixed(2);
+  $("spa-r-wrap").style.display = s === "fixed" ? "" : "none";
+  $("spa-rival-leg").style.display = s === "fixed" ? "" : "none";
+  const us = spaCurve(v, m, s, r);
+  const runs = argmaxRuns(BIDS, us);
+  const best = Math.max(...us), iv = Math.round(v * 100);
+  const vlines = [{ x: v, cls: "v-true", label: "b = v", lcls: "lbl-true" }];
+  if (s === "fixed") vlines.push({ x: r, cls: "v-rival", label: "rival bid r", lcls: "lbl-rival" });
+  plot($("spa-plot"), {
+    x: [0, 1], y: yRange(us), xlabel: "bidder 1 bid b",
+    ylabel: s === "fixed" ? "utility" : "expected utility",
+    series: [{ xs: BIDS, ys: us, cls: "s-main", step: s === "fixed" }],
+    bands: runs, vlines, points: [{ x: v, y: us[iv], cls: "pt-max" }],
+  });
+  const runTxt = runs.map(([a, b]) => (a === b ? a.toFixed(2) : `[${a.toFixed(2)}, ${b.toFixed(2)}]`)).join(", ");
+  $("spa-stats").innerHTML = stat("u(b = v) =", fmt(us[iv], 4)) + stat("max u =", fmt(best, 4)) +
+    stat("optimal bids:", runTxt) + stat("b = v optimal?", us[iv] >= best - 1e-12 ? "yes ✓" : "no");
+}
+
+// ------------------------------------------------------------------ FPA
+const KS = Array.from({ length: 191 }, (_, i) => 0.1 + i / 100);
+function renderFPA() {
+  const n = +$("fpa-n").value, k = +$("fpa-k").value, keq = (n - 1) / n;
+  $("fpa-n-out").textContent = n;
+  $("fpa-k-out").textContent = k.toFixed(2);
+  const us = KS.map((kk) => fpaExpected(n, kk));
+  const ueq = fpaExpected(n, keq), uk = fpaExpected(n, k);
+  plot($("fpa-plot"), {
+    x: [0.1, 2], y: yRange(us), xlabel: "bidder 1 shading factor k (bid = k·v)", ylabel: "expected utility",
+    series: [{ xs: KS, ys: us, cls: "s-main" }],
+    vlines: [{ x: keq, cls: "v-eq", label: `equilibrium k = ${fmt(keq, 3)}`, lcls: "lbl-eq" },
+             { x: k, cls: "v-cur", label: `your k = ${k.toFixed(2)}`, lcls: "lbl-cur" }],
+    points: [{ x: keq, y: ueq, cls: "pt-max" }, { x: k, y: uk, cls: "pt-cur" }],
+  });
+  const diff = uk - ueq;
+  $("fpa-stats").innerHTML = stat("E[u] at your k =", fmt(uk, 4)) +
+    stat("E[u] at equilibrium =", `${fmt(ueq, 4)} = 1/(n(n+1))`) +
+    stat("deviation costs", `<span class="${diff < -1e-12 ? "neg" : ""}">${fmt(diff, 4)}</span>`) +
+    stat("P(win | v₁=1) =", fmt(Math.min(1, (n * k) / (n - 1)) ** (n - 1), 3));
+}
+
+// ------------------------------------------------------------------ VCG
+const POS = { A: [0, 0], B: [1, 1], C: [1, -1], D: [2, 1], E: [2, 0], F: [3, 0] };
+const gx = (p) => 60 + p[0] * 166, gy = (p) => 150 - p[1] * 105;
+const declared = { ...TRUE_COSTS };
+
+function buildVCGTable() {
+  const tb = $("vcg-table").querySelector("tbody");
+  for (const e of Object.keys(TRUE_COSTS)) {
+    const tr = document.createElement("tr");
+    tr.id = `row-${e}`;
+    tr.innerHTML = `<td><b>${e}</b></td><td>${TRUE_COSTS[e]}</td>` +
+      `<td><input type="number" min="0" max="20" step="0.5" value="${TRUE_COSTS[e]}" aria-label="declared cost ${e}" data-edge="${e}"></td>` +
+      `<td></td><td></td><td></td><td></td><td></td>`;
+    tb.append(tr);
+  }
+  tb.addEventListener("input", (ev) => {
+    const e = ev.target.dataset.edge, x = parseFloat(ev.target.value);
+    if (e && Number.isFinite(x) && x >= 0) { declared[e] = x; renderVCG(); }
+  });
+}
+
+function renderVCG() {
+  const { chosen, payments } = vcg(declared);
+  const on = new Set(pathEdges(chosen));
+  const svg = $("vcg-graph");
+  svg.replaceChildren();
+  const defs = el("defs");
+  for (const [id, sz] of [["arr", 7], ["arrOn", 5]]) {
+    const mk = el("marker", { id, viewBox: "0 0 10 10", refX: 10, refY: 5, markerWidth: sz, markerHeight: sz, orient: "auto-start-reverse" });
+    mk.append(el("path", { d: "M0,0 L10,5 L0,10 z" }));
+    defs.append(mk);
+  }
+  svg.append(defs);
+  const R = 22;
+  const labels = [];
+  for (const e of Object.keys(TRUE_COSTS)) {
+    const a = POS[e[0]], b = POS[e[1]];
+    let x0 = gx(a), y0 = gy(a), x1 = gx(b), y1 = gy(b), d, lx, ly;
+    if (e === "CF") { // bend below E
+      const cx = (x0 + x1) / 2, cy = Math.max(y0, y1) + 70;
+      const s0 = Math.hypot(cx - x0, cy - y0), s1 = Math.hypot(x1 - cx, y1 - cy);
+      const ax = x0 + ((cx - x0) / s0) * R, ay = y0 + ((cy - y0) / s0) * R;
+      const bx = x1 - ((x1 - cx) / s1) * (R + 2), by = y1 - ((y1 - cy) / s1) * (R + 2);
+      d = `M${ax},${ay} Q${cx},${cy} ${bx},${by}`;
+      lx = 0.25 * x0 + 0.5 * cx + 0.25 * x1; ly = 0.25 * y0 + 0.5 * cy + 0.25 * y1;
+    } else {
+      const L = Math.hypot(x1 - x0, y1 - y0), ux = (x1 - x0) / L, uy = (y1 - y0) / L;
+      d = `M${x0 + ux * R},${y0 + uy * R} L${x1 - ux * (R + 2)},${y1 - uy * (R + 2)}`;
+      lx = (x0 + x1) / 2; ly = (y0 + y1) / 2 - (y0 === y1 ? 15 : 0); // horizontal edges: label above
+    }
+    const isOn = on.has(e);
+    svg.append(el("path", { d, class: `edge${isOn ? " on" : ""}`, "marker-end": `url(#${isOn ? "arrOn" : "arr"})` }));
+    const txt = isOn ? `${e} ${fmt(declared[e], 1)} · paid ${fmt(-payments[e], 1)}` : `${e} ${fmt(declared[e], 1)}`;
+    labels.push([lx, ly, txt, isOn]);
+  }
+  for (const [lx, ly, txt, isOn] of labels) {
+    const w = txt.length * 6.6 + 8;
+    svg.append(el("rect", { x: lx - w / 2, y: ly - 9, width: w, height: 18, rx: 4, class: "elbg" }));
+    svg.append(el("text", { x: lx, y: ly, class: `elbl${isOn ? " on" : ""}` }, txt));
+  }
+  for (const [nd, p] of Object.entries(POS)) {
+    svg.append(el("circle", { cx: gx(p), cy: gy(p), r: R, class: `node${chosen.includes(nd) ? " on" : ""}` }));
+    svg.append(el("text", { x: gx(p), y: gy(p), class: "nodelbl" }, nd));
+  }
+
+  let totalPaid = 0;
+  for (const e of Object.keys(TRUE_COSTS)) {
+    const isOn = on.has(e), paid = -payments[e];
+    if (isOn) totalPaid += paid;
+    const u = edgeUtility(e, declared);
+    const uTruth = edgeUtility(e, { ...declared, [e]: TRUE_COSTS[e] });
+    const gain = u - uTruth;
+    const tds = $(`row-${e}`).children;
+    $(`row-${e}`).className = isOn ? "on" : "";
+    tds[3].textContent = isOn ? "yes" : "no";
+    const [alt, altCost] = bestPath(declared, e);
+    tds[4].textContent = `${alt} (${fmt(altCost, 1)})`;
+    tds[5].textContent = fmt(paid, 2);
+    tds[6].innerHTML = `<span class="${u < 0 ? "neg" : ""}">${fmt(u, 2)}</span>`;
+    tds[7].innerHTML = `<span class="${gain < -1e-12 ? "neg" : gain > 1e-12 ? "pos" : ""}">${gain > 0 ? "+" : ""}${fmt(gain, 2)}</span>`;
+  }
+  const trueCost = pathCost(chosen, TRUE_COSTS), decCost = pathCost(chosen, declared);
+  const bestTrue = bestPath(TRUE_COSTS)[1];
+  $("vcg-stats").innerHTML = stat("chosen path", chosen) +
+    stat("declared cost", fmt(decCost, 2)) + stat("true cost", fmt(trueCost, 2)) +
+    stat("total paid to edges", fmt(totalPaid, 2)) +
+    stat("deficit (paid − true cost)", fmt(totalPaid - trueCost, 2)) +
+    (trueCost > bestTrue ? stat("efficiency loss", `<span class="neg">+${fmt(trueCost - bestTrue, 2)}</span>`) : "");
+}
+
+function preset(p) {
+  Object.assign(declared, TRUE_COSTS);
+  if (p !== "truth") { const [e, x] = p.split(":"); declared[e] = +x; }
+  document.querySelectorAll("#vcg-table input").forEach((inp) => (inp.value = declared[inp.dataset.edge]));
+  renderVCG();
+}
+
+// ------------------------------------------------------------------ tabs + wiring
+function show(tab) {
+  document.querySelectorAll("section").forEach((s) => s.classList.toggle("active", s.id === `tab-${tab}`));
+  document.querySelectorAll("nav button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  if (location.hash !== `#${tab}`) history.replaceState(null, "", `#${tab}`);
+}
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => show(b.dataset.tab)));
+["spa-v", "spa-m", "spa-s", "spa-r"].forEach((id) => $(id).addEventListener("input", renderSPA));
+["fpa-n", "fpa-k"].forEach((id) => $(id).addEventListener("input", renderFPA));
+document.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => preset(b.dataset.preset)));
+buildVCGTable();
+renderSPA(); renderFPA(); renderVCG();
+show(["spa", "fpa", "vcg"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "spa");
+</script>
+</body>
+</html>
